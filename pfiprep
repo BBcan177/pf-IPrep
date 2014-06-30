@@ -1,0 +1,574 @@
+#!/bin/sh
+# pfIP Reputation Manager 2.3.3 - By BBcan177@gmail.com - 04-12-14
+# Copyright (C) 2014 BBcan177@gmail.com
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License Version 2 as
+# published by the Free Software Foundation.  You may not use, modify or
+# distribute this program under any other version of the GNU General
+# Public License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# pfIP Reputation Manager will download Blocklists and can remove duplicate entries.
+# It can look for repeat Offenders in a /24 Range and condense the Block to a single /24 Line.
+# This is done using the "max", "dmax" and "pmax" variables.
+# A final p/24 process utilizes GeoIP Country Code whitelist to exclude selectable countries, "dmax" variable.
+# A Final p/24 process condenses Blocklists with a "pmax" variable (Excluding Country Whitelists)
+#  (Depending on settings, either the original Blocked IPs remain or a single /24 Block is used)
+# Settings also allow for repeat Offending Ranges to be placed into a "Monitor/Match" List excluding the Blocked IPs.
+# Output files are single files 1)Downloaded version 2)Original Unmodified version 3) Final de-duplicate version
+# Three masterfiles are created 1) Mastercat (no Text) 2) Masterfile (Contains Blocklist Name with IP addresses)
+# 3) Mastermatch file Used for Monitoring Ranges of Repeat Offenders.
+# Blocklists are compiled into Group/Tiers at the end of each scheduled Download process.
+# Individual Blocklists can also be used in the [ /pf ] and [ /ET ] folders.
+#
+# Country Code Blocking is also possible using the Maxmind GeoIP Database tool
+#
+# Blocklists can be in .zip, .gz, .txt, Dotted Quad Notation, CIDR, or Range formats.
+# Blocklists can be Local Files or URLs, utilizing Fetch, Wget or Rsync.
+# Several Different "Processes" Are included to Capture the Correct Data.
+# pfIPrep will automatically download lists on a Fresh Install or when a new blocklist is added. No need to set bypass=yes
+#
+# pfIPrep can output to 'Snorts IP Reputation processor Blocklist' and 'OSSEC-HIDS IP Rep Blocklist'
+# It was designed primarily for pfSense and can reload the Blocklists automatically into pf.
+#
+# This is a two part script. This file is the User Config file, and the "pfiprepman" is the main script.
+# Execute pfIP Reputation Manager with "pfiprep" only.
+#
+# ** Dependencies **
+# In pfSense, always add dependencies from the Shell. Not the Diagnostics:Command Prompt
+#
+# [1] Requires installation of "grepcidr"  http://www.pc-tools.net/unix/grepcidr/
+# Most recent version is 2.0, but 1.3 will work fine.
+# FreeBSD  [  pkg_add -r grepcidr  ]
+# Linux    [  apt-get install grepcidr  ]
+# Other    [  yum search grepcidr  ] and [  yum install grepcidr..... ]
+#
+# [2] Requires Maxmind GeoIP.dat Country Database
+# FreeBSD [  pkg_add -r GeoIP  ]
+# Linux   [  apt-get install geoip-bin  ]
+# Other   [  yum search geoip  ] and [  yum install geoip...ver. ]
+#
+# Script can also use Rsync (Not a Dependency) (Spamhaus Botnet_CC)
+# FreebSD [  pkg_add -r rsync  ]
+# Linux   [  apt-get install rsync  ]
+#
+# When making major changes to the Blocklists, its best to delete the database and restart fresh.
+# [   ./pfiprep killdb   ] or [  ./pfiprep killdb dskip  ] to use Previous Downloaded Lists
+# This will not delete customized settings. Only will delete the database.
+#
+# Create a cron job to execute this script once per hour and the scripts scheduler will process accordingly.
+# this will also create the Download.log file.
+# For FreeBSD you can add [  /usr/bin/nice -n20  ] before the command to control cpu usage
+# Do not run Cron and manually initiate the script to avoid collision. In the shell use [  ./pfiprep  ]
+# [ * 1 * * * root /home/USER/pfiprep >> /home/USER/download.log 2>&1 ]
+
+# ================================================================
+# FOLDER LOCATION for this Program      (no trailing "/")
+# Change this to Your USER Folder
+userfolder=/home/USER
+# ================================================================
+# THIS SCRIPT references the main Script IP Rep Manager.
+. $userfolder/pfiprepman
+# ================================================================
+# Dependency Application Paths
+pathgrepcidr=/usr/local/bin/grepcidr
+pathfetch=/usr/bin/fetch
+pathwget=/usr/local/bin/wget
+pathgeoip=/usr/local/bin/geoiplookup
+pathgunzip=/usr/bin/gunzip
+pathunzip=/usr/local/bin/unzip
+pathlogger=/usr/bin/logger
+pathrsync=/usr/local/bin/rsync
+pathjot=/usr/bin/jot
+pathpfctl=/sbin/pfctl
+# ================================================================
+# Download Method.      Select "fetch" or "wget"
+dmethod=fetch
+# ================================================================
+# To Download Blocklists without the Scheduler, set "bypass=yes"
+bypass=no
+# ================================================================
+# To skip Download process and use Pre-Downloaded files
+dskip=no
+# ================================================================
+# JOT is a FreeBSD program. On other OS, you can change
+# this to look for enum at the path below.
+pathenum=/bin/enum
+# ================================================================
+# FILE LOCATIONS
+# Daily Log File
+logfile=$userfolder/daily.log
+# Download log file
+downloadlog=$userfolder/download.log
+# FINAL MASTER BlockList File (w/ Header Name)
+masterfile=$userfolder/masterfile
+# FINAL Master Blocklist file (w/o Header Name)
+mastercat=$userfolder/mastercat
+# FINAL Master Match File (x.x.x.0/24 and "!" IPs)
+mastermatch=$userfolder/mastermatch
+# Script Lock File Location
+pfipreplock=/tmp/pfiprep.lock
+# Comment out the line to Skip Script Locking (Single Process Only)
+touch $pfipreplock
+# ================================================================
+# FOLDER PATHS        (use trailing "/" for Folders)
+# Download folder
+workdir=$userfolder/download/
+# Original BlockList location
+pforigdir=$userfolder/orig/
+# FINAL Individual Blocklist Files
+pfdir=$userfolder/pf/
+# FINAL Master Match Folder for Firewall "Match" Lists
+pfmatch=$userfolder/match/
+# ================================================================
+# On Successful "POST SYNC" Check, Lists are merged into TIER Lists
+# For pfSense create a new folder in  [ /usr/local/www/ ]
+# For other OS, can be anywhere.
+#                                    (use trailing "/" for Folders)
+aliasdir=/usr/local/www/aliastables/
+# ================================================================
+# Max number of lines to retain in Download Log file
+maxlines=20000
+# ================================================================
+
+# ================================================================
+# Database Paths for Maxmind GeoIP Country Lists
+# Databases are Downloaded and Searchs performed Locally.
+# Maxmind GeoIP is used for two different processes
+# 1] Country Code Blocklist
+#    Path to Raw Database (do not edit)
+pathgeoipccdata=$userfolder/GeoIPCountryWhois.csv
+#    Whitelist File for Country Code Blocklist
+#    Edit this file and "#" out the countries to Whitelist
+#    See more details in the "Blocklist" Section below.
+countrycodelist=$userfolder/countrycodes
+# 2] p24 Process to Determine Country Code (White/Blacklists)
+#    Path to CC Binary
+pathgeoipdat=$userfolder/GeoIP.dat
+pathgeoipdatgz=$userfolder/GeoIP.dat.gz
+# ================================================================
+# Country Codes to exclude from p24 Process
+# (Two Digit CC codes can be found in the  ( countrycodelist file )
+cc="CA, US"
+# ================================================================
+# Define what to do with IP Ranges found that are in the
+# country Code p24 Process (pass/match)
+ccwhite=match
+# Define what to do with IP Ranges found that are in the
+# Country Code p24 Process (block/match)
+ccblack=block
+# For pfSense, the "Match" IPs can be "Monitored" with
+# "Floating Rules" which can log packets from these IP Ranges,
+# but still allow the Blocking of the Individual IPs found in the
+# same /24 Range.
+# ================================================================
+# Global Blocklist p24 Disable setting
+globalp24=no
+# ================================================================
+# De-duplication performs a final check on all files and removes
+# duplications (Country Whitelisting using GeoIP.dat Lookup)
+dedup=yes
+# ================================================================
+# De-duplication performs a final check on all files and removes
+# duplications (No Country Whitelisting using GeoIP.dat Lookup)
+Pdup=yes
+# ================================================================
+# Individual Blocklist p24 Setting (Using Country Code Whitelist)
+# Set this to the Maximum number of Blacklisted IP addr in a /24 Range.
+# If the max amount of addresses are found the range is entered as x.x.x.x/24
+max=5
+# ================================================================
+# Final Blocklist p24 Setting (Using Country Codes Whitelist) ( Using Dedup=yes )
+# Set this to the Maximum number of Blacklisted IP addr in a /24 Range.
+# If the max amount of addresses are found the range is entered as x.x.x.x/24
+dmax=5
+# ================================================================
+# Final Blocklist p24 Setting (Country Codes Excluded) ( Using pdup=yes )
+# Set this to the Maximum number of Blocklisted IP addr in a /24 Range.
+# If the max amount of addresses are found the range is entered as x.x.x.x/24
+pmax=50
+
+# ================================================================
+# HOW TO CLEAR DATABASE AND RESTART (Config settings remain intact)
+# ================================================================
+#
+# ================================================================
+# If the Database becomes out of SYNC, you can use this function.
+# This will not delete the Download folder or Config Settings.
+# When Adding/Removing Country Blocking this step should be completed.
+# Use [ dskip=yes ] to use previous downloads
+# To call this function [ ./pfiprep killdb ] or [ ./pfiprep killdb dskip ]
+#  to Skip Dowloads if Previous Downloads exist
+# ================================================================
+if [ "$2" == "dskip" ]; then dskip=yes; fi
+if [ "$1" == "killdb" ]; then killdbfunction; fi
+# ================================================================
+
+# ================================================================
+#      pfSense pfctl / SNORT / OSSEC Integration Settings
+# ================================================================
+
+# ================================================================
+# pfSense - Reload TIER Groups With PFCTL functionality
+# Folder path set in Folder Section above (aliasdir)
+# The Script will create the pfSense Tables automatically using the
+# GroupNames (Tiers). You can create "Aliase" in pfSense to use the
+# tables. The Script will automatically update the tables as needed.
+# Folder path set in Folder Section above (aliasdir)
+# Alias URL Table ex.[ https://127.0.0.1:[port]/aliastables/IR_PRI1 ]
+pfupdate=yes
+# ================================================================
+# Snort IP Reputation Processor Integration
+# This is for pfSense Snort Only (Not Implemented YET!)
+snort=no
+snortlist=/var/db/snort/iprep/blocklist.txt
+# ================================================================
+# OSSEC-HIDS IP Reputation Integration
+# For IP addresses the dot notation is used for subnet matches
+# Due to address lookups being based on the
+# class boundary, "0/24" is converted to ":"
+ossec=no
+osseclist=$userfolder/ossec-blocklist
+ossectxt=":"
+# ================================================================
+# Send pfIPrep logs to pfSense System Logs
+plog=no
+# ================================================================
+
+
+# ================================================================
+# Hourly Schedule in 24-Hour Clock Format
+# Note: single digits require a space prefix ie: " 1"
+# ================================================================
+sch1="24";
+sch4=" 1, 5, 9,13,17,21";
+sch8=" 1, 9,17";
+sch12=" 1,13";
+sch24=" 1";
+# ================================================================
+# Number of Days for the Recursive Download Process. (MTA List)
+keepdays=60
+# ================================================================
+# ET PRO IQRISK IPrep Account Information
+# Help URL - http://emergingthreats.net/products/iqrisk-rep-list/
+# Enter your ET PRO Download Code
+etprocode=XXXXXXXXXXXXXXXX
+etdir=$userfolder/ET
+#
+# Category LEGEND (Short Name) [  options - pass / block  ]
+#Do not Edit the Short Name, Only edit the option.
+#
+etcnc=block         # Category 1
+etbot=block
+etspam=block
+etdrop=block
+etspywarecnc=block
+etonlinegaming=block
+etdrivebysrc=block
+# etcat8            <-- Doesn't Exist. Future Use
+etchatserver=pass
+ettornode=block
+# etcat11           <-- Doesn't Exist. Future Use
+# etcat12           <-- Doesn't Exist. Future Use
+etcompromised=block
+# etcat14           <-- Doesn't Exist. Future Use
+etp2p=pass
+etproxy=pass
+etipcheck=pass
+# etcat18           <-- Doesn't Exist. Future Use
+etutility=pass
+etddos=block
+etscanner=block
+# etcat22           <-- Doesn't Exist. Future Use
+etbrute=block
+etfakeav=block
+etdyndns=pass
+etundesireable=pass
+etabusedtld=pass
+etselfsignedssl=pass
+etblackhole=block
+etras=pass
+etp2pcnc=pass
+etsharedhosting=pass
+etparking=block
+etvpn=pass
+etexesource=pass
+# etcat36           <-- Doesn't Exist. Future Use
+etmobilecnc=block
+etmobilespyware=block
+etskypenode=pass
+etbitcoin=block
+etddosattack=block  # Category 41
+#
+# An "unknown" file will be created for any categories not listed above!
+# These individual ET Files can be referenced for "Monitor/Match" or other uses.
+# ================================================================
+# Blocklist Group Names
+tier1=IR_PRI1
+tier2=IR_PRI2
+tier3=IR_PRI3
+tier4=IR_SEC1
+tier5=IR_SEC2
+tier6=IR_SEC3
+tier7=IR_IB
+tier8=IR_TOR
+tier9=IR_MAIL
+tier10=IR_CC
+# This is the Alias name for the Match file that will be
+# saved in the AliasDir folder with the other Grouped Files.
+# The Script requires the word "match" to be "in" the name.
+matchgroup=IR_Match
+# ================================================================
+
+# Create Files/Folders as required
+
+if [ ! -f $masterfile ]; then touch $masterfile; fi
+if [ ! -f $mastercat ]; then touch $mastercat; fi
+if [ ! -f $logfile ]; then touch $logfile; fi
+if [ ! -f $downloadlog ]; then touch $downloadlog; fi
+if [ ! -f $snortlist -a "$snort" == "yes" ]; then touch $snortlist; fi
+if [ ! -f $mastermatch ]; then touch $mastermatch; fi
+if [ ! -f $osseclist -a "$ossec" == "yes" ]; then touch $osseclist; fi
+if [ ! -d $pfdir ]; then mkdir $pfdir; fi
+if [ ! -d $pforigdir ]; then mkdir $pforigdir; fi
+if [ ! -d $pfmatch ]; then mkdir $pfmatch; fi
+if [ ! -d $aliasdir ]; then mkdir $aliasdir; fi
+if [ ! -d $etdir ]; then mkdir $etdir; fi
+
+# Set bypass=yes on First Run
+if [ ! -d $workdir ]; then
+        mkdir $workdir
+        bypass=yes
+fi
+
+# ================================================================
+#
+#                  Block Lists are entered here
+#
+# ================================================================
+# header=   < Blocklist name - no whitespaces allowed >
+#
+# addr=     < HTTP or HTTPS path to Blocklist >
+#
+# infile=   < Filename from Website >
+#
+# process=  < Method to convert downloaded file >
+#             - process          (Most common)
+#             - processtar       (ZIP files)
+#             - processib        (IBlock Lists .GZ)
+#             - processblock     (Block type lists)
+#             - processrecursive (Download Multi-html Pages)
+#
+# p24=      < Process to convert multiple found addr
+#             to a /24 range (see "max" variable)>
+#            ( yes or no )
+#           < Don't recommend using dedup/pdup without p24. >
+#           < dedup and pdup are performed at the end >
+#           < Setting "p24=no" will bypass these processes >
+#
+# sch=      < Scheduler setting >
+#
+# dup=      < Duplicate Removal process comparing all
+#             other lists previously downloaded >
+#             ( yes or no )
+
+# atype=    < Address Type to Utilize >
+#            'faf'           - utilizes Fetch web address and filename
+#            'fa'            - utilized Fetch web address only
+#            'local'         - Direct copy of local files
+#            'processlocal'  - "Process" of local files
+#            'rsync'         - Transfer utilizing RSYNC
+# ================================================================
+#
+# collect   < You can skip one of the Blocklists by
+#             putting a # infront of collect. >
+#
+# ================================================================
+#
+# To 'remove' a Blocklist after it has been downloaded, add a
+#
+# "remove" beside the Blocklist "collect" command as such:
+#
+#  [  collect "$SCH" "Blocklist Details" "remove"  ]
+#
+# Once the scheduler runs that particular Blocklist, it will remove
+# it from the Database and put a "#" so it will not run again.
+#
+# For the Original File Count to work, "Iblock Lists" must start with
+#   "IBlock" in the Header name! IBlock Original file counts will
+#   only be accounted for when Iblock Lists are scheduled to Download.
+#
+#
+# **
+# ** HEADER NAMES MUST BE UNIQUE. Do not use "Abuse" and another "AbuseSpyeye"
+# **
+#
+# ================================================================
+# Maxmind GeoIP Country Code Database Binary Download for p24 Process
+# This will download on the First Tuesday of each Month automatically
+# When the Binary is downloaded it will create a [ ccbinary.lock ] file in the
+# $userfolder path to avoid downloading multiple times. If you want to
+# [ bypass=yes ], delete the [ ccbinary.lock ] file.
+# Help URL [ http://dev.maxmind.com/faq/what-are-the-eu-europe-and-ap-asia-pacific-entries/ ]
+# Help URL [ http://dev.maxmind.com/geoip/legacy/codes/iso3166/ ]
+
+header=CountryBinary
+addr=http://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/
+infile=GeoIP.dat.gz
+
+countrybinary
+# ================================================================
+# ================================================================
+
+# MaxMind GeoIP COUNTRY CODE Blocklist      (** FIRST STEP **)
+# Set Schedule to "once per day". Any changes made to the Whitelist
+# Country Code file will be incorporated at that time.
+
+# - To remove, enter  [  countrycode "remove"  ]
+#
+# Before using -
+# Uncomment the [ countrybinary ] line below.
+# Run this script which will create the [ countrycode ] config file
+# When the script exits "EDIT" the [  countrycodes  ] file and
+# enter "#" infront of the Countries to Whitelist. Rerun this script.
+#
+# When Adding/Removing Country Blocking the [  ./pfiprep killdb  ]
+# Function should be performed
+# ================================================================
+
+# Maxmind GeoIP Country Code - Blocklist Download
+#
+# This will only download on the first Tuesday of Each Month
+# Any changes to the [  Countrycode  ] text file will be done at that time.
+# When the CSV Database is downloaded it will create a [ cccsv.lock ] file
+# in the $userfolder path to avoid downloading multiple times. If you
+# want to bypass, delete the [ cccsv.lock ] file.
+
+header=CountryBlock
+group=tier10
+addr=https://geolite.maxmind.com/download/geoip/database/
+infile=GeoIPCountryCSV.zip
+
+#countrycode
+# ================================================================
+
+# This list is not required for pfSense as its downloaded
+# automatically (Check Advanced Settings)
+# FYI - The Following are included in the Bogons
+# "192.168.0.0/16|172.16.0.0/12|10.0.0.0/8"
+
+# Do not use with pfSense
+#collect "$sch24" "Cymru_Bogons|tier10|http://www.team-cymru.org/Services/Bogons/|fullbogons-ipv4.txt|process|yes|yes|faf"
+#
+# =======================================================================================================
+#                          BLOCKLISTS
+# =======================================================================================================
+# DEFINITION GUIDE
+# =======================================================================================================
+# collect "$sch" "List_Name | Group | WEB | Infile | Process | p24 setting | dup setting | Address Type"
+# =======================================================================================================
+#(To Keep Database Consistencies, add "remove" at the end of a line to Remove a previously downloaded list)
+#   Add a "#" infront of not previously downloaded List, "# collect" to skip a particular Blocklist.
+# =======================================================================================================
+
+collect "$sch1" "ET_IPrep|tier1|https://rules.emergingthreatspro.com/$etprocode/reputation/|iprepdata.txt.gz|processet|yes|yes|faf"
+collect "$sch4" "ET_Comp|tier1|https://rules.emergingthreats.net/blockrules/|compromised-ips.txt|process|yes|yes|faf"
+collect "$sch4" "ET_Block|tier1|https://rules.emergingthreats.net/fwrules/|emerging-Block-IPs.txt|process|yes|yes|faf"
+collect "$sch4" "Spamhaus_drop|tier1|http://www.spamhaus.org/drop/|drop.txt|process|yes|yes|faf"
+collect "$sch4" "Spamhaus_edrop|tier1|http://www.spamhaus.org/drop/|edrop.txt|process|yes|yes|faf"
+# INFO - To use this list you must register with Spamhaus (Spamteq) URL https://www.spamhaustech.com/security/ip-reputation/
+collect "$sch4" "Spamhaus_CC|tier1|na.dr.spamhaus.net::security/|botnetcc|process|yes|yes|rsync"
+collect "$sch4" "CIArmy|tier1|http://cinsscore.com/list/|ci-badguys.txt|process|yes|yes|faf"
+collect "$sch4" "AbuseZeus|tier1|https://zeustracker.abuse.ch/blocklist.php?download=ipblocklis|abusezeusip.txt|process|yes|yes|fa"
+collect "$sch4" "AbuseSpyeye|tier1|https://spyeyetracker.abuse.ch/blocklist.php?download=ipblocklist|abusespyeyeip.txt|process|yes|yes|fa"
+collect "$sch4" "AbusePalevo|tier1|https://palevotracker.abuse.ch/blocklists.php?download=ipblocklist|abusepalevoip.txt|process|yes|yes|fa"
+collect "$sch4" "dShield_Top|tier1|https://feeds.dshield.org/|top10-2.txt|process|yes|yes|faf"
+collect "$sch4" "dShield_Block|tier1|https://feeds.dshield.org/|block.txt|processblock|yes|yes|faf"
+collect "$sch4" "SnortBL|tier1|https://labs.snort.org/feeds/|ip-filter.blf|process|yes|yes|faf"
+collect "$sch4" "ISC_top10|tier1|https://isc.sans.edu/reports.html|ISC_top10.txt|process|yes|yes|fa"
+
+# INFO - Collect IPs from pfSense Snort/Suricata Rulesets. Uncomment (#) the correct line from below.
+#collect "$sch4" "Snort64|tier1|/usr/pbi/snort-amd64/etc/snort/rules/|snort64|process|yes|yes|processlocal"
+#collect "$sch4" "Snort32|tier1|/usr/pbi/snort-i386/etc/snort/rules/|snort32|process|yes|yes|processlocal"
+#collect "$sch4" "Suri64|tier1|/usr/pbi/suricata-amd64/etc/suricata/rules|suricata64|process|yes|yes|processlocal"
+#collect "$sch4" "Suri32|tier1|/usr/pbi/suricata-i386/etc/suricata/rules|suricata32|process|yes|yes|processlocal"
+
+collect "$sch1" "ALIENVAULT|tier2|https://reputation.alienvault.com/|reputation.snort|process|yes|yes|faf"
+collect "$sch4" "Atlas_Attacks|tier2|https://atlas.arbor.net/summary/|attacks.csv|process|yes|yes|faf"
+collect "$sch4" "Atlas_Botnets|tier2|https://atlas.arbor.net/summary/|botnets.csv|process|yes|yes|faf"
+collect "$sch4" "Atlas_Fastflux|tier2|https://atlas.arbor.net/summary/|fastflux.csv|process|yes|yes|faf"
+collect "$sch4" "Atlas_Phishing|tier2|https://atlas.arbor.net/summary/|phishing.csv|process|yes|yes|faf"
+collect "$sch4" "Atlas_Scans|tier2|https://atlas.arbor.net/summary/|scans.csv|process|yes|yes|faf"
+collect "$sch4" "Atlas_SSH|tier2|https://atlas-public.ec2.arbor.net/public/|ssh_attackers|process|yes|yes|faf"
+collect "$sch4" "SRI_Attackers|tier2|http://www.cyber-ta.org/releases/malware/SOURCES/|Attacker.Cumulative.Summary|process|yes|yes|faf"
+collect "$sch4" "SRI_CC|tier2|http://www.cyber-ta.org/releases/malware/SOURCES/|CandC.Cumulative.Summary|process|yes|yes|faf"
+collect "$sch4" "HoneyPot|tier2|https://www.projecthoneypot.org/list_of_ips.php?t=d&rss=1|honeypot.txt|process|yes|yes|fa"
+
+collect "$sch4" "MDL|tier4|http://www.malwaredomainlist.com/hostslist/|ip.txt|process|yes|yes|faf"
+collect "$sch4" "NOThink_BL|tier4|http://www.nothink.org/blacklist/|blacklist_malware_http.txt|process|yes|yes|faf"
+collect "$sch4" "NOThink_SSH|tier4|http://www.nothink.org/blacklist/|blacklist_ssh_week.txt|process|yes|yes|faf"
+collect "$sch4" "NOThink_Malware|tier4|http://www.nothink.org/blacklist/|blacklist_malware_dns.txt|process|yes|yes|faf"
+collect "$sch4" "DangerRulez|tier4|http://danger.rulez.sk/projects/bruteforceblocker/|blist.php|process|yes|yes|faf"
+collect "$sch4" "Shunlist|tier4|https://www.autoshun.org/files/|shunlist.csv|process|yes|yes|faf"
+collect "$sch4" "Infiltrated|tier4|http://www.infiltrated.net/|blacklisted|process|yes|yes|faf"
+collect "$sch4" "DRG_SSH|tier4|https://www.dragonresearchgroup.org/insight/|sshpwauth.txt|process|yes|yes|faf"
+collect "$sch4" "DRG_VNC|tier4|https://www.dragonresearchgroup.org/insight/|vncprobe.txt|process|yes|yes|faf"
+collect "$sch4" "DRG_http|tier4|https://www.dragonresearchgroup.org/insight/|http-report.txt|process|yes|yes|faf"
+collect "$sch4" "Feodo_Block|tier4|https://feodotracker.abuse.ch/blocklist/?download=ipblocklist|feodoblockip.txt|process|yes|yes|fa"
+collect "$sch4" "Feodo_Bad|tier4|https://feodotracker.abuse.ch/blocklist/?download=badips|feodobadip.txt|process|yes|yes|fa"
+collect "$sch4" "WatchGuard|tier4|http://www.reputationauthority.org/|toptens.php|process|yes|yes|fa"
+collect "$sch4" "VMX|tier4|https://vmx.yourcmc.ru/|BAD_HOSTS.IP4|process|yes|yes|faf"
+collect "$sch4" "Geopsy|tier4|http://www.geopsy.org/|blacklist.html|process|yes|yes|faf"
+collect "$sch4" "MTA|tier4|http://malware-traffic-analysis.net/|index.html|processrecursive|yes|yes|faf"
+collect "$sch4" "Maxmind_Proxy|tier4|https://www.maxmind.com/en/anonymous_proxies|maxmindproxy.txt|process|yes|yes|fa"
+collect "$sch4" "BotScout|tier4|http://www.botscout.com/last_caught_cache.htm|BotScout.txt|process|yes|yes|fa"
+collect "$sch4" "HackedReport|tier4|http://www.hackedreport.com/DownloadAll.aspx|HackedReport.txt|process|yes|yes|fa"
+collect "$sch4" "Juniper_Spam|tier4|https://www.juniper.net/security/auto/spam/|Juniper_Spam.txt|process|yes|yes|fa"
+collect "$sch4" "Greensnow|tier4|http://blocklist.greensnow.co/|greensnow.txt|process|yes|yes|faf"
+collect "$sch4" "malwared|tier4|http://malwared.ru/db/|fulllist.php|process|yes|yes|faf"
+collect "$sch4" "Cybercrime|tier4|http://cybercrime-tracker.net/|all.php|process|yes|yes|faf"
+
+collect "$sch8" "MalwareGroup|tier5|http://www.malwaregroup.com/ipaddresses/|malicious|process|yes|yes|faf"
+collect "$sch8" "OpenBL|tier5|http://www.us.openbl.org/lists/|base_30days.txt|process|yes|yes|faf"
+collect "$sch8" "malc0de|tier5|https://malc0de.com/bl/|IP_Blacklist.txt|process|yes|yes|faf"
+
+# INFO - BadIPs reference a Scoring System (0-5) ( 0 - Full List, 1-2 - Agressive, 3-4 - Conservative, 5 - Ultra Conservative )
+# INFO - Edit the Score in the collect line below following "/any/"
+# INFO - Categories can be changed from "any" to one of these (http://www.badips.com/get/categories)
+collect "$sch4" "BadIPs|tier6|http://www.badips.com/get/list/any/2|badip|process|yes|yes|fa"
+
+# INFO - This is based on the Spamhaus Drop list.
+collect "$sch4" "IBlock_BT_Hijack|tier7|http://list.iblocklist.com/?list=usrcshglbiilevmyfhse&fileformat=p2p&archiveformat=gz|iblockhiip.txt|processib|yes|yes|fa"
+collect "$sch4" "IBlock_BT_FS|tier7|http://list.iblocklist.com/?list=ficutxiwawokxlcyoeye&fileformat=p2p&archiveformat=gz|iblockfspamip.txt|processib|yes|yes|fa"
+collect "$sch4" "IBlock_BT_Web|tier7|http://list.iblocklist.com/?list=ghlzqtqxnzctvvajwwag&fileformat=p2p&archiveformat=gz|iblockweip.txt|processib|yes|yes|fa"
+collect "$sch4" "IBlock_BT_Spy|tier7|http://list.iblocklist.com/?list=llvtlsjyoyiczbkjsxpf&fileformat=p2p&archiveformat=gz|iblockspyip.txt|processib|yes|yes|fa"
+collect "$sch4" "IBlock_Badpeer|tier7|http://list.iblocklist.com/?list=cwworuawihqvocglcoss&fileformat=p2p&archiveformat=gz|iblockbpip.txt|processib|yes|yes|fa"
+
+# ================================================================
+#               TOR EXIT Blocklists
+# ================================================================
+
+collect "$sch4" "IBlock_Onion|tier8|http://list.iblocklist.com/?list=togdoptykrlolpddwbvz&fileformat=p2p&archiveformat=gz|iblockonion.txt|processib|yes|yes|fa"
+collect "$sch4" "Blut_TOR|tier8|https://torstatus.blutmagie.de/ip_list_exit.php/|Tor_ip_list_EXIT.csv|process|yes|yes|faf"
+
+# ================================================================
+#               MAILSERVER Blocklists
+# ================================================================
+
+#collect "$sch4" "VirBL|tier9|https://virbl.bit.nl/download/|virbl.dnsbl.bit.nl.txt|process|yes|yes|faf"
+#collect "$sch1" "BLOCKLIST_DE|tier9|https://lists.blocklist.de/lists/|all.txt|process|yes|yes|faf"
+#collect "$sch8" "SFS|tier9|http://www.stopforumspam.com/downloads/|bannedips.zip|processtar|yes|yes|faf"
+#collect "$sch4" "Improware|tier9|http://antispam.imp.ch/|spamlist|process|yes|yes|faf"
+#collect "$sch4" "ToastedSpam|tier9|http://toastedspam.com/denylist.cgi|toastedspam_deny.txt|process|yes|yes|fa"
+#collect "$sch1" "Spamcop|tier9|http://spamcop.net/w3m?action=map;net=cmaxcnt;mask=65535;sort=spamcnt;format=text|spamcop.txt|process|yes|yes|fa"
+#collect "$sch4" "URIBL|tier9|http://rss.uribl.com/reports/7d/|dns_a.html|process|yes|yes|faf"
+
+# ================================================================
+closingprocess
+clearvars
+exit
