@@ -24,22 +24,19 @@
 #
 #     Use pfiprep to execute ( Which contains user configurable settings )
 #
-
+ 
 now=$(date); echo; echo "**** UPDATE PROCESS INITIATED - " $now " ****"; echo; now=$(date +%k)
-
+ 
 # ================================================================
 #     Check if another pfIPrep process is currently operational.
 # ================================================================
-
+ 
 if [ ! -f $pfipreplock ]; then
-        if [ "$plog" == "yes" ]; then
-                $pathlogger -t pfIPrep "Cannot continue, pfIPrep is currently in Operation . [ $pfipreplock ] exists"
-        else
-                echo "Cannot continue, pfIPrep is currently in Operation"
-        fi
+        if [ "$plog" == "yes" ]; then $pathlogger -t pfIPrep "Cannot continue, pfIPrep is currently in Operation . [ $pfipreplock ] exists"; fi
+        echo "Cannot continue, pfIPrep is currently in Operation"
         exit 1
 fi
-
+ 
 # ================================================================
 #         Check to see if Dependencies are Installed
 # ================================================================
@@ -47,17 +44,17 @@ if [ ! -x $pathgrepcidr ]; then echo "Application [ Grepcidr ] Not found. Can't 
 if [ "$dmethod" == "fetch" -a ! -x $pathfetch ]; then echo "Application [ Fetch ] not found. Can't proceed."; exit; fi
 if [ "$dmethod" == "wget" -a ! -x $pathwget ]; then echo "Application [ wget ] not found. Can't proceed."; exit; fi
 # ================================================================
-
+ 
 killdbfunction() {
 # Fresh Start process to clear database
-# To call this function [ ./pfiprep killdb +/- dskip ]
-echo " Deleting IP Rep Databases."
+# To call this function [  ./pfiprep killdb  ] or [  ./pfiprep killdb dskip  ]
+echo " Deleting pfIP Rep Databases."
 rm -r $masterfile; rm -r $mastercat; rm -r $mastermatch
 rm -r $pforigdir; rm -r $pfdir; rm -r $pfmatch
 echo; echo "Databases have been Deleted!"; echo
 bypass=yes
 }
-
+ 
 # Create Files/Folders as required
 tempfile=/tmp/listtemp
 tempfile2=/tmp/listtemp2
@@ -71,7 +68,7 @@ ccbinarylock=$userfolder/cc_binary.lock
 cccsvlock=$userfolder/cc_csv.lock
 # Store "Match" d-dedups in matchdedup.txt file
 matchdedup=matchdedup.txt
-
+ 
 if [ ! -f $tempfile ]; then touch $tempfile; fi
 if [ ! -f $tempfile2 ]; then touch $tempfile2; fi
 if [ ! -f $dupfile ]; then touch $dupfile; fi
@@ -80,7 +77,7 @@ if [ ! -f $addfile ]; then touch $addfile; fi
 if [ ! -f $syncfile ]; then touch $syncfile; fi
 if [ ! -f $matchfile ]; then touch $matchfile; fi
 if [ ! -f $tempmatchfile ]; then touch $tempmatchfile; fi
-
+ 
 clearvars(){
 header=""; addr=""; infile=""; outfile=""; process=""; logentry=""; eventnow=""; dup=""; data=""; ccheck=""
 A=""; A1=""; B=""; B1=""; diff=""; count=""; i=""; ii=""; list=""; data=""; ip=""; file=""; proceed=0; pcount=""
@@ -88,31 +85,32 @@ icount=""; iicount=""; fcount=""; hcheck=""; lcheck=""; countm=""; counto=""; sa
 passupdate=""; tierlist=""; groupname=""; mmcount=""; urldata=""; urlepoch=""; var=""; var2=""; d=""; killdb=""
 > $tempfile; > $tempfile2; > $dupfile; > $dedupfile; > $addfile; > $tempmatchfile; > $matchfile
 }
-
+ 
 # ================================================================
 #    Processes to extract IP addresses from Downloaded Blocklist
 # ================================================================
-
+ 
 ##########
 # Primary Process to extract IP addresses from Downloaded Blocklist
 process(){
 grep -aoEw -e "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?/[0-9]{2})" -e "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)" $workdir$infile | grep -Ev "^(192\.168|10\.|172\.1[6789]\.|172\.2[0-9]\.|172\.3[01]\.|127\.0\.0\.1|0\.0\.0\.0)" | sort | uniq > $pforigdir$outfile
 cp $pforigdir$outfile $pfdir$outfile
-
+ 
 cicount=$(grep -cv '^#\|^$' $workdir$infile); cocount=$(grep -cv "^1\.1\.1\.1" $pfdir$outfile)
 echo; echo "Download file count [ $cicount ]  Outfile count [ $cocount ]"
 }
-
+ 
 ##########
 # Process to extract IP addresses from Downloaded Blocklist - Zip Downloads
 processtar(){
-tar -xOf $workdir$infile | tr , '\n' | grep -aoEw -e "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?/[0-9]{2})" -e "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)" | grep -Ev '^(192\.168|10\.|172\.1[6789]\.|172\.2[0-9]\.|172\.3[01]\.|127\.0\.0\.1|0\.0\.0\.0)' | sort | uniq > $pforigdir$outfile
+tar -xOf $workdir$infile | tr , '\n' | grep -aoEw -e "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?/[0-9]{2})" -e "(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)" |
+        grep -Ev '^(192\.168|10\.|172\.1[6789]\.|172\.2[0-9]\.|172\.3[01]\.|127\.0\.0\.1|0\.0\.0\.0)' | sort | uniq > $pforigdir$outfile
 cp $pforigdir$outfile $pfdir$outfile
-
+ 
 cocount=$(grep -cv "^1\.1\.1\.1" $pfdir$outfile)
 echo; echo "Download file count [ tar file ]  Outfile count [ $cocount ]"
 }
-
+ 
 ##########
 # Process to extract IP addresses from Block Type Lists ie-dShield block.txt
 processblock(){
@@ -120,15 +118,15 @@ grep -aoEw -e "[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0]{1}" $workdir$infile |
         grep -Ev '^(192\.168|10\.|172\.1[6789]\.|172\.2[0-9]\.|172\.3[01]\.|127\.0\.0\.1|0\.0\.0\.0)' | sort | uniq |
         cut -d '.' -f 1-3 | sed 's/$/.0\/24/' > $pforigdir$outfile
         cp $pforigdir$outfile $pfdir$outfile
-
+ 
 cocount=$(grep -cv "^1\.1\.1\.1" $pfdir$outfile)
 echo; echo "Outfile count [ $cocount ]"
 }
-
+ 
 ##########
 # Process to extract IP addresses from Downloaded Blocklist - IBlock list range type (GZ Format)
 processib(){
-data="$($pathgunzip -c $workdir$infile | sed 's/^.*://' | grep -v '^#\|^$' | sort | uniq)"
+data="$($pathgunzip -c $workdir$infile | grep -v '^#\|^$\|^:' | sed 's/^.*://' | sort | uniq)"
 echo "$data" > $pforigdir$outfile
 if [ -e "$pfdir$outfile" ]; then rm $pfdir$outfile; fi
 icount=0; iicount=0; [ -x $pathenum ] && pathjot=$pathenum
@@ -163,16 +161,16 @@ for i in $data; do
         fi
         iicount=$(($icount + $iicount))
 done
-
+ 
 grep -Ev '^(192\.168|10\.|172\.1[6789]\.|172\.2[0-9]\.|172\.3[01]\.|127\.0\.0\.1|0\.0\.0\.0)' $pfdir$outfile > $tempfile; mv -f $tempfile $pfdir$outfile
 cicount=$(echo "$data" | grep -cv '^#\|^$'); cocount=$(grep -cv "^1\.1\.1\.1" $pfdir$outfile)
 echo; echo "Raw Download file count [ $cicount ] Original IP Calculated count [ $iicount ] Outfile iBlock count [ $cocount ]"
 }
-
+ 
 ##########
 # Process to Download a website html and collect IPs for the "keepdays" variable on multiple web pages
 processrecursive() {
-
+ 
 keepsec=$((86400 * $keepdays)); maxepoch=$((`date '+%s'` - $keepsec))
 > $tempfile; > $tempfile2; echo
 urldata=$(grep -oEw "[0-9]{4}/[0-9]{2}/[0-9]{2}/index.html" $workdir$infile | sort | uniq)
@@ -191,7 +189,7 @@ else
                         if [ "$dmethod" == "fetch" ]; then $pathfetch -v -o $tempfile -T 20 $addr$i
                         elif [ "$dmethod" == "wget" ]; then $pathwget --no-check-certificate -T 20 -O $tempfile $addr$i
                         else echo "No download method chosen"; returncode=1
-                fi
+                        fi
                         returncode=$?; echo
                         if [ "$returncode" -eq "0" ]; then cat $tempfile >> $tempfile2; fi
                 fi
@@ -204,15 +202,15 @@ if [ -s "$workdir$infile" ]; then
         mv -f $pfdir$outfile $pforigdir$outfile
         grep -Ev '^(192\.168|10\.|172\.1[6789]\.|172\.2[0-9]\.|172\.3[01]\.|127\.0\.0\.1|0\.0\.0\.0)' $pforigdir$outfile |
                 sort | uniq > $pfdir$outfile
-
+ 
 cocount=$(grep -cv "^1\.1\.1\.1" $pfdir$outfile)
 echo; echo "Outfile count [ $cocount ]"
 fi
 }
-
+ 
 # Process to Split ET Pro IPREP into Category Files and Compile selected Blocked categories into Outfile
 processet() {
-
+ 
 $pathgunzip -c $workdir$infile > $pforigdir$outfile
 returncode=$?
 if [ "$returncode" -eq "0" ]; then
@@ -220,7 +218,7 @@ if [ "$returncode" -eq "0" ]; then
         # Remove Previous ET IPRep Files
         [ -d $etdir ] && [ "$(ls -A $etdir)" ] && rm $etdir/e_t*
         if [ -f $pfdir$outfile ]; then rm -r $pfdir$outfile; rm $pfdir$evar; fi
-
+ 
         # ET CSV Format (IP, Category, Score)
         echo; echo "Processing [ $header ]"
         while IFS="," read a b c
@@ -270,7 +268,7 @@ if [ "$returncode" -eq "0" ]; then
                 *)  echo $a >> $etdir/unknown;;
         esac
         done <"$pforigdir$outfile"
-
+ 
         # Compile "Block" ET IPREP lists
         data=$(ls $etdir | tr -d '_')
         for list in $data; do
@@ -284,11 +282,12 @@ if [ "$returncode" -eq "0" ]; then
         cicount=$(cat $etdir/e_t* | grep -cv '^#\|^$'); cocount=$(grep -cv "^1\.1\.1\.1" $pfdir$outfile)
         echo; echo "ET Folder count [ $cicount ]  Outfile count [ $cocount ]"
 else
+        if [ "$plog" == "yes" ]; then $pathlogger -t pfIPrep "Gunzip failed for [ $header ]"; fi
         echo "Gunzip failed for [ $header ]"
 fi
 }
-
-
+ 
+ 
 ##########
 # Process to Remove IPs that are over 255 IPs in a Blocklist
 process255() {
@@ -303,11 +302,11 @@ if [ ! -z "$data255" ]; then
         for ip in $data255; do echo $ip"0/24" >> $pfdir$outfile; done
 fi
 }
-
+ 
 # ================================================================
 #               Sub Process to Collect Groupname
 # ================================================================
-
+ 
 ##########
 # Process to Collect Blocklist Groupname Information
 casegroup() {
@@ -324,20 +323,20 @@ case "$group" in
         tier10) tier10="$tier10 $header";;
 esac
 }
-
+ 
 ##########
 # Process to Download Maxmind GeoIP Country Code Database Binary First Tuesday of Each Month
 countrybinary() {
-
+ 
 dom=$(date +%e); returncode=0; proceed=0
-
+ 
 # Only run "once" on the first Tuesday of Each month unless the bypass is set to "Yes"
 if [ ! -f $pathgeoipdat ]; then proceed=1; rm -r $ccbinarylock; fi
 if [ $(date +%w) -eq 2 ] && [ $dom -ge 8 -a $dom -le 14 ]; then proceed=1; fi
 if [ ! -x $pathgunzip ]; then echo "Application [ Gunzip ] Not found, Can't proceed."; proceed=0; fi
 mdate=$(find $pathgeoipdat -mtime +31)
 if [ "$mdate" == "$pathgeoipdat" ]; then proceed=1; rm -r $ccbinarylock; fi
-
+ 
 if [ "$proceed" -eq "1" ]; then
         if [ -f $ccbinarylock ]; then
                 :
@@ -352,11 +351,11 @@ else
         if [ -f $ccbinarylock ]; then rm $ccbinarylock; fi
 fi
 }
-
+ 
 ##########
 # Process to download Country Code Database CSV from MaxMind First Tuesday of Each Month
 countrycode() {
-
+ 
 dom=$(date +%e); p24=no; dup=no; proceed=0; outfile="p24"$header".txt"
 if [ "$1" == "remove" ]; then
         grep $header $masterfile > $tempfile
@@ -381,7 +380,7 @@ else
 fi
 # Cancel CC Process
 if [ ! -x $pathunzip ]; then echo "Application [ Unzip ] Not found, Can't proceed."; proceed=0; fi
-
+ 
 if [ "$proceed" -eq "1" ]; then
         # Only Download the CSV Database Once. Or manually delete the cccsvlock
         if [ -f $cccsvlock ]; then
@@ -425,11 +424,11 @@ else
         if [ -f $cccsvlock ]; then rm $cccsvlock; fi
 fi
 }
-
+ 
 # ================================================================
 #  Blocklist Download processes 1) process24  2) duplicate
 # ================================================================
-
+ 
 ##########
 # Process to condense an IP range if a "Max" amount of IP addresses are found in a /24 range
 process24() {
@@ -453,6 +452,7 @@ if [ -f $pathgeoipdat ]; then
                 esac
         done
 else
+        if [ "$plog" == "yes" ]; then $pathlogger -t pfIPrep "Maxmind Binary Database Missing [ $pathgeoipdat ], skipping p24 Process"; fi
         echo; echo "Maxmind Binary Database Missing [ $pathgeoipdat ], skipping p24 Process"; echo
 fi
 # Collect Match File Details
@@ -467,12 +467,12 @@ if [ -s "$matchfile" -a ! "$dedup" == "yes" ]; then
                 sed 's/^/\!/' $tempfile2 >> $tempmatchfile
         fi
 fi
-
+ 
 # If no Matches found remove previous Matchoutfile if exists.
 if [ ! -s "$tempmatchfile" -a -f $matchoutfile ]; then rm $matchoutfile; fi
 # Move Match File to the Match Folder by Individual Blocklist Name
 if [ -s "$tempmatchfile" ]; then mv -f $tempmatchfile $pfmatch$matchoutfile; fi
-
+ 
 # Find Repeat Offenders in each individual Blocklist Outfile
 if [ -s "$dupfile" ]; then
         > $tempfile2
@@ -493,7 +493,7 @@ if [ -s "$dupfile" ]; then
 fi
 if [ "$count" == "0" ]; then echo "Found [ 0 ] IP range(s) over the threshold of [ $max ] p24 - CC Blacklist"; fi
 if [ "$safe" == "0" ]; then echo "Found [ 0 ] IP range(s) over the threshold of [ $max ] p24 - CC Whitelist"; fi
-
+ 
 if [ -s "$dupfile" -o -s "$matchfile" ]; then
 echo
 echo "Process /24 Stats"
@@ -511,22 +511,22 @@ if [ "$ccblack" == "block" ]; then
 else
         echo "Skipped, CCBlack set to [ $ccblack ]"
 fi
-
+ 
 echo "---------------------------"
 cocount=$(grep -cv "^1\.1\.1\.1" $pfdir$outfile)
 echo "Post /24 Count   [ $cocount ]"
 fi
 }
-
+ 
 ##########
 # Process to remove Duplicate Entries on each downloaded Blocklist Individually
 duplicate(){
-
+ 
 # Checks to see if Masterfile has data and doesn't contain Existing Blocklist
 dupcheck=yes
 hcheck=$(grep -c ^ $masterfile); if [ "$hcheck" -eq "0" ]; then dupcheck=no; fi
 lcheck=$(grep -m 1 $header $masterfile ); if [ "$lcheck" == "" ]; then dupcheck=no; fi
-
+ 
 if [ "$dupcheck" == "yes" ]; then
         grep $header $masterfile > $tempfile
         awk 'FNR==NR{a[$0];next}!($0 in a)' $tempfile $masterfile > $tempfile2; mv -f $tempfile2 $masterfile
@@ -542,7 +542,7 @@ else
         sed -e 's/^/'$header' /' $pfdir$outfile >> $masterfile
         sed 's/^.* //' $masterfile > $mastercat
 fi
-
+ 
 countm=$(grep -c $header $masterfile); counto=$(grep -c ^ $pfdir$outfile)
 if [ "$countm" == "$counto" ]; then sanity="Passed" || sanity=" ==> FAILED <== "; fi
 echo; echo "Post Duplication count"; echo "---------------------------"
@@ -550,23 +550,23 @@ echo "Masterfile Count [ $countm ]"
 echo "Outfile Count    [ $counto ]      [ $sanity ]"
 echo "----------------------------------------------------------------"
 }
-
+ 
 # ================================================================
 # After all Scheduled Downloads - pdeduplication & ddeduplication
 # ================================================================
-
+ 
 ##########
 # Process to perform a final De-Duplication on all of the BlockLists (Excluding Country Whitelist) ("pmax" variable).
 pdeduplication(){
 > $tempfile; > $tempfile2; > $dupfile; > $addfile; > $dedupfile; count=0; dcount=0
-data="$(find $pfdir* ! -name "p24*" ! -name "e_t*" -type f | xargs cut -d '.' -f 1-3 |
+data="$(find $pfdir ! -name "p24*" ! -name "e_t*" -type f | xargs cut -d '.' -f 1-3 |
         awk -v pmax="$pmax" '{a[$0]++}END{for(i in a){if(a[i] > pmax){print i}}}' | grep -v "^1\.1\.1")"
 count=$(echo "$data" | grep -c ^)
 if [ "$data" == "" ]; then count=0; fi
 # Find Repeat Offenders in each individual Blocklist Outfile
 for ip in $data; do
         pcount=1; ii=$(echo "^$ip." | sed 's/\./\\\./g')
-        list=$(find $pfdir* ! -name "p24*" ! -name "e_t*" -type f | xargs grep -al $ii)
+        list=$(find $pfdir ! -name "p24*" ! -name "e_t*" -type f | xargs grep -al $ii)
         for blfile in $list; do
                 header=$(echo "${blfile##*/}" | cut -d '.' -f1)
                 grep $ii $blfile > $tempfile
@@ -600,13 +600,13 @@ fi
 count=$(grep -c ^ $masterfile)
 echo; echo "   [ Post p-Deduplication count ]  [ $count ]"
 }
-
+ 
 ##########
 # De-Duplication utilizing MaxMind GeoIP Country Code Whitelisting ("dmax" variable)
 deduplication(){
 > $tempfile; > $tempfile2; > $dupfile; > $addfile; > $dedupfile; > $matchfile; > $tempmatchfile; count=0; dcount=0; mcount=0; mmcount=0
 echo; echo "Querying for Repeat Offenders"
-data="$(find $pfdir* ! -name "p24*" ! -name "e_t*" -type f | xargs cut -d '.' -f 1-3 |
+data="$(find $pfdir ! -name "p24*" ! -name "e_t*" -type f | xargs cut -d '.' -f 1-3 |
         awk -v dmax="$dmax" '{a[$0]++}END{for(i in a){if(a[i] > dmax){print i}}}' | grep -v "^1\.1\.1")"
 count=$(echo "$data" | grep -c ^)
 if [ "$data" == "" ]; then count=0; fi
@@ -633,7 +633,7 @@ if [ -s "$matchfile" ]; then
         echo "Processing [ Match ] IPs"
         match=$(sed -e 's/^/^/' -e 's/\./\\\./g' $matchfile)
         for mfile in $match; do
-                find $pfdir* ! -name "p24*" ! -name "e_t*" -type f | xargs grep $mfile >> $tempfile
+                find $pfdir ! -name "p24*" ! -name "e_t*" -type f | xargs grep $mfile >> $tempfile
         done
         sed 's/$/0\/24/' $matchfile >> $tempmatchfile
         sed -e 's/.*://' -e 's/^/\!/' $tempfile >> $tempmatchfile
@@ -647,7 +647,7 @@ if [ -s "$dupfile" ]; then
         dup=$(cat $dupfile)
         for ip in $dup; do
                 pcount=1; ii=$(echo "^$ip" | sed 's/\./\\\./g')
-                list=$(find $pfdir* ! -name "p24*" ! -name "e_t" -type f | xargs grep -al $ii)
+                list=$(find $pfdir ! -name "p24*" ! -name "e_t" -type f | xargs grep -al $ii)
                 for blfile in $list; do
                         header=$(echo "${blfile##*/}" | cut -d '.' -f1)
                         grep $ii $blfile > $tempfile
@@ -685,7 +685,7 @@ if [ -s "$dupfile" ]; then
                 sed 's/^.* //' $masterfile > $mastercat
         fi
 fi
-
+ 
 echo; echo "Found [ $count ] IP range(s) over the threshold of dmax= [ $dmax ]"
 echo "Found [ $safe ] IP range(s) classified as Whitelisted"
 echo; echo "Found [ $dcount ] CC Blacklisted IP Address(es) are being set to [ $ccblack ]"
@@ -697,14 +697,14 @@ fi
 count=$(grep -c ^ $masterfile)
 echo "   [ Post d-Deduplication count ]  [ $count ]"
 }
-
+ 
 # ================================================================
 #       MAIN Collect Process to call all other functions
 # ================================================================
-
+ 
 # Main Collection process to download Blocklists and call appropriate Sub-Process(es)
 collect(){
-
+ 
 # Set varibles from Collect $2
 switch=$(echo $2 | tr '|' '\n'); y=1; proceed=0
 for line in $switch; do
@@ -727,7 +727,7 @@ for line in $switch; do
         esac
         y=$(($y + 1))
 done
-
+ 
 # Check Scheduler
 outfile=$header".txt"
 if [ "$p24" == "no" ]; then outfile="p24"$header".txt"; fi
@@ -738,16 +738,16 @@ else
         *$now*) proceed=1;;
         esac
 fi
-
+ 
 # Capture Group INFO
 casegroup
-
+ 
 # Set proceed = 1 to bypass schedule
 if [ "$bypass" == "yes" ]; then proceed=1; fi
-
+ 
 # If a new Blocklist is selected, bypass scheduler
 if [ ! -f "$workdir$infile" ]; then proceed=1; fi
-
+ 
 # Check if list to be removed with Collect $3
 if [ "$3" == "remove" ]; then
         grep $header $masterfile > $tempfile
@@ -757,11 +757,11 @@ if [ "$3" == "remove" ]; then
         echo; echo "The Following list has been REMOVED [ $header ]"; echo
         proceed=0
 fi
-
+ 
 # Check Header Name to meet Unique Criteria before Downloading
 headerchk=$(grep $header $masterfile | cut -d ' ' -f1 | sort | uniq | grep -c ^)
 if [ "$headerchk" -gt "1" ]; then echo; echo "Cannot add [ $header ] Header Name is not Unique"; proceed=0; echo; fi
-
+ 
 if [ "$proceed" == "1" ]; then
         if [ "$dskip" == "yes" ]; then
                 if [ -f $workdir$infile ]; then
@@ -820,12 +820,12 @@ else
 fi
 clearvars
 }
-
-
+ 
+ 
 # ================================================================
 #                      FINAL Closing Process
 # ================================================================
-
+ 
 closingprocess(){
 # Add Original File Lists + IBlock var "fcount" for Final - Original Count
 # IBlock List Counts limited to when the Scheduler Downloads these lists.
@@ -845,46 +845,46 @@ if [ "$dedup" == "yes" ]; then
         deduplication
         echo
 fi
-
+ 
 # Write "1.1.1.1" to the Not downloaded Blocklist File
-emptyfiles=$(find $pfdir* ! -name "e_t*" -type f -size 0)
+emptyfiles=$(find $pfdir ! -name "e_t*" -type f -size 0)
 for i in $emptyfiles; do echo "1.1.1.1" > $i; done
-
+ 
 s1=$(grep -c ^ $masterfile)
-s2=$(find $pfdir* ! -name "e_t*" -type f | xargs grep -v "1\.1\.1\.1" | grep -c ^)
+s2=$(find $pfdir ! -name "e_t*" -type f | xargs grep -v "1\.1\.1\.1" | grep -c ^)
 s3=$(sort $mastercat | uniq -d | tail -30)
-s4=$(find $pfdir* ! -name "e_t*" -type f | grep -v "1\.1\.1\.1" | sort | uniq -d | tail -30)
-
+s4=$(find $pfdir ! -name "e_t*" -type f | grep -v "1\.1\.1\.1" | sort | uniq -d | tail -30)
+ 
 echo "===[ Blocklist IP Counts ]==========================="; echo
-find $pfdir* ! -name "e_t*" -type f | xargs wc -l | sort -n -r; echo
+find $pfdir ! -name "e_t*" -type f | xargs wc -l | sort -n -r; echo
 echo; echo "            Empty Lists w/1.1.1.1"
 echo "================================================"; echo
 echo "Sanity Check   ** These two Counts should Match! **"
 echo "------------"
 echo "Masterfile Count [ $s1 ]"
 echo "pf folder Count  [ $s2 ]"; echo
-echo "Duplication Sanity Check (Pass=none)"
+echo "Duplication Sanity Check (Pass=No IPs reported)"
 echo "------------------------"
 echo "Masterfile/pf Folder Uniq check"
 if [ ! -z "$s3" ]; then echo $s3; fi
 echo "pf folder/Masterfile Uniq check"
 if [ ! -z "$s4" ]; then echo $s4; fi
-echo; echo "Sync Check (Pass=none)"
+echo; echo "Sync Check (Pass=No IPs reported)"
 echo "----------"
-find $pfdir* ! -name "e_t*" -type f | xargs grep -hv "1\.1\.1\.1" > $syncfile
+find $pfdir ! -name "e_t*" -type f | xargs grep -hv "1\.1\.1\.1" > $syncfile
 echo "Missing IPs in Mastercat"
 awk 'FNR==NR{a[$0];next}!($0 in a)' $syncfile $mastercat | tail -30
 echo "Missing IPs in pf folder"
 awk 'FNR==NR{a[$0];next}!($0 in a)' $mastercat $syncfile | tail -30
 echo
-
+ 
 sort -u -o $masterfile $masterfile
 sort -t . -k 1,1n -k 2,2n -k 3,3n -k 4,4n $mastercat > $tempfile; mv -f $tempfile $mastercat
-
+ 
 # Comment-out Blocklists that are removed
 script=$(basename $0)
 sed -i '' '/^collect.*remove/ s/^/#/' $userfolder/$script
-
+ 
 # Process to copy Mastercat Block lists to Snort IPRep Folder
 # Restart pfSense Snort Enabled Interfaces to reload new IPRep Blocklists
 if [ "$snort" == "yes" ]; then
@@ -892,17 +892,17 @@ if [ "$snort" == "yes" ]; then
         cp $mastercat $snortlist
         pkill -HUP snort
 fi
-
+ 
 # Process to copy Mastercat Blocklist to OSSEC-HIDS Folder
 if [ "$ossec" == "yes" ]; then
         sed "s/0\/24/$ossectxt/" $mastercat > $osseclist
 fi
-
+ 
 # Build MasterMatch File from Match folder and Deduplication Matchs.
 if [ "$ccwhite" == "match" -o "$ccblack" == "match" -a -f $pathgeoipdat ]; then
-        cat $pfmatch* | awk '{ print $1 }' | sort | awk '{print $1 " " $2;}' | sort -n > $tempfile; mv -f $tempfile $mastermatch
+        awk '{ print $1 }' $pfmatch* | sort | awk '{print $1 " " $2;}' | sort -n > $tempfile; mv -f $tempfile $mastermatch
 fi
-
+ 
 # Update Group Files if Sanity Check Pass
 if [ "$s1" == "$s2" -a "$s3" == "$s4" ]; then
         echo; echo "===>  Sanity Checks PASSED, Updating Group Lists  <==="; echo
@@ -940,15 +940,22 @@ if [ "$s1" == "$s2" -a "$s3" == "$s4" ]; then
                         count=1; passupdate=""; updatechk=""; tierlist=""; groupname=""; > $tempfile
                 fi
         done
+else
+        if [ "$plog" == "yes" ]; then $pathlogger -t pfIPrep "Sanity Checks FAILED, No Updates to Tables"; fi
+        echo; echo "===>  Sanity Checks FAILED, No Updates to Tables  <==="; echo
 fi
-
+ 
 echo; echo "Alias Table IP Counts (w/o 1.1.1.1)"; echo "-----------------------------"
-find $aliasdir* ! -iname "*match*" -type f | xargs wc -l | sort -n -r
-
-echo; echo "Alias Table (Match) IP Counts"; echo "-----------------------------"
-cp $mastermatch $aliasdir$matchgroup
-find $aliasdir* -iname "*match*" -type f | xargs wc -l | sort -n -r
-
+find $aliasdir ! -iname "*match*" -type f | xargs wc -l | sort -n -r
+ 
+if [ -f $mastermatch ]; then
+        echo; echo "Alias Table (Match) IP Counts"; echo "-----------------------------"
+        cp $mastermatch $aliasdir$matchgroup
+        find $aliasdir -iname "*match*" -type f | xargs wc -l | sort -n -r
+else
+        rm $aliasdir$matchgroup
+fi
+ 
 # Report Table Entry Allocation and Usage Stats.
 if [ "$pfupdate" == "yes" ]; then
         echo; echo "pfSense Table Stats"; echo "-------------------"
@@ -956,13 +963,13 @@ if [ "$pfupdate" == "yes" ]; then
         pfctlcount=$($pathpfctl -vvsTables | awk '/Addresses/ {s+=$2}; END {print s}')
         echo "Table Usage Count       " $pfctlcount; echo
 fi
-
+ 
 # Check MaxMind CountryCode Database Age
 if [ -f $pathgeoipccdata ]; then find $pathgeoipccdata -mtime +31 | xargs echo Country Code CSV is OUT OF DATE;fi
 if [ -f $pathgeoipdat ]; then find $pathgeoipdat -mtime +31 | xargs echo Country Code Binary is OUT OF DATE; fi
-
+ 
 now=$(date); echo; echo; echo "**** UPDATE PROCESS ENDED - " $now " ****"; echo
-
+ 
 # Manage download log file to max number of lines variable
 linecount=$(grep -c ^ $downloadlog)
 if [ "$linecount" -gt "$maxlines" ]; then
