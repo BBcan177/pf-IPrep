@@ -1,0 +1,77 @@
+--- /usr/local/www/widgets/widgets/pfBlocker.widget.php 2014-06-28 13:11:18.000000000 -0400
++++ /usr/local/www/widgets/widgets/pfBlocker.widget.php 2014-06-28 13:06:55.000000000 -0400
+@@ -2,6 +2,7 @@
+ /*
+         Copyright 2011 Thomas Schaefer - Tomschaefer.org
+         Copyright 2011 Marcello Coutinho
++       (2014) Edited by BBcan177 to support pf IP Reputation Manager
+         Part of pfSense widgets (www.pfsense.org)
+ 
+         Redistribution and use in source and binary forms, with or without
+@@ -28,7 +29,7 @@
+ @require_once("guiconfig.inc");
+ @require_once("pfsense-utils.inc");
+ @require_once("functions.inc");
+-?><div id='pfBlocker'><?php
++?><div id='pf IP Reputation Manager'><?php
+ echo "<table style=\"padding-top:0px; padding-bottom:0px; padding-left:0px; padding-right:0px\" width=\"100%\" border=\"0\" cellpadding=\"0\"
+ cellspacing=\"0\"";
+ echo"  <tr>";
+@@ -38,7 +39,7 @@
+ $in="<img src ='/themes/{$g['theme']}/images/icons/icon_interface_up.gif'>";
+ if (is_array($config['aliases']['alias']))
+ foreach ($config['aliases']['alias'] as $cbalias){
+-       if (preg_match("/pfBlocker/",$cbalias['name'])){
++       if (preg_match("/IR_/",$cbalias['name'])){
+ 
+                if (file_exists('/usr/local/www/aliastables/'.$cbalias['name'])){
+                                preg_match("/(\d+)/",exec("/usr/bin/wc -l /usr/local/www/aliastables/".$cbalias['name']),$matches);
+@@ -52,7 +53,7 @@
+ #(label, evaluations,packets total, bytes total, packets in, bytes in,packets out, bytes out)
+ $packets=exec("/sbin/pfctl -s labels",$debug);
+ foreach ($debug as $line){
+-               #USER_RULE: pfBlocker Outbound rule 1656 0 0 0 0 0 0
++               #USER_RULE: IR_PRI1 1656 0 0 0 0 0 0
+                if (preg_match("/USER_RULE: (\w+).*\s+\d+\s+(\d+)\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+/",$line,$matches))
+                        ${$matches[1]}+=$matches[2];
+ }
+@@ -60,10 +61,10 @@
+ $rules=$config['filter']['rule'];
+ #echo "<pre>";
+ foreach($rules as $rule){
+-       if (preg_match("/pfBlocker/",$rule['source']['address']))
++       if (preg_match("/IR/",$rule['source']['address']))
+                $pfb_table[$rule['source']['address']]["img"]=$in;
+ 
+-       if (preg_match("/pfBlocker/",$rule['destination']['address']))
++       if (preg_match("/IR/",$rule['destination']['address']))
+                $pfb_table[$rule['destination']['address']]["img"]=$in;
+ }
+ print "<pre>";
+@@ -83,7 +84,7 @@
+ echo"</table></div>";
+ ?>
+ <script type="text/javascript">
+-       function getstatus_pfblocker() {
++       function getstatus_pfIP_Reputation() {
+                var url = "/widgets/widgets/pfBlocker.widget.php";
+                var pars = 'getupdatestatus=yes';
+                var myAjax = new Ajax.Request(
+@@ -91,13 +92,13 @@
+                        {
+                                method: 'get',
+                                parameters: pars,
+-                               onComplete: activitycallback_pfblocker
++                               onComplete: activitycallback_pfIP_Reputation
+                        });
+                //I know it's ugly but works.
+-               setTimeout('getstatus_pfblocker()', 10000);
++               setTimeout('getstatus_pfIP_Reputation()', 10000);
+                }
+-       function activitycallback_pfblocker(transport) {
++       function activitycallback_pfIP_Reputation(transport) {
+                $('pfBlocker').innerHTML = transport.responseText;
+        }
+-       getstatus_pfblocker();
++       getstatus_pfIP_Reputation();
+ </script>
