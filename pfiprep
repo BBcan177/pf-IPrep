@@ -66,7 +66,7 @@
 # For FreeBSD you can add [  /usr/bin/nice -n20  ] before the command to control cpu usage
 # Do not run Cron and manually initiate the script to avoid collision. In the shell use [  ./pfiprep  ]
 # [ * 1 * * * root /home/USER/pfiprep >> /home/USER/download.log 2>&1 ]
-
+ 
 # ================================================================
 # FOLDER LOCATION for this Program      (no trailing "/")
 # Change this to Your USER Folder
@@ -135,7 +135,7 @@ aliasdir=/usr/local/www/aliastables/
 # Max number of lines to retain in Download Log file
 maxlines=20000
 # ================================================================
-
+ 
 # ================================================================
 # Database Paths for Maxmind GeoIP Country Lists
 # Databases are Downloaded and Searchs performed Locally.
@@ -176,7 +176,7 @@ dedup=yes
 # ================================================================
 # De-duplication performs a final check on all files and removes
 # duplications (No Country Whitelisting using GeoIP.dat Lookup)
-Pdup=yes
+pdup=yes
 # ================================================================
 # Individual Blocklist p24 Setting (Using Country Code Whitelist)
 # Set this to the Maximum number of Blacklisted IP addr in a /24 Range.
@@ -192,7 +192,7 @@ dmax=5
 # Set this to the Maximum number of Blocklisted IP addr in a /24 Range.
 # If the max amount of addresses are found the range is entered as x.x.x.x/24
 pmax=50
-
+ 
 # ================================================================
 # HOW TO CLEAR DATABASE AND RESTART (Config settings remain intact)
 # ================================================================
@@ -208,11 +208,11 @@ pmax=50
 if [ "$2" == "dskip" ]; then dskip=yes; fi
 if [ "$1" == "killdb" ]; then killdbfunction; fi
 # ================================================================
-
+ 
 # ================================================================
 #      pfSense pfctl / SNORT / OSSEC Integration Settings
 # ================================================================
-
+ 
 # ================================================================
 # pfSense - Reload TIER Groups With PFCTL functionality
 # Folder path set in Folder Section above (aliasdir)
@@ -220,6 +220,7 @@ if [ "$1" == "killdb" ]; then killdbfunction; fi
 # GroupNames (Tiers). You can create "Aliase" in pfSense to use the
 # tables. The Script will automatically update the tables as needed.
 # Folder path set in Folder Section above (aliasdir)
+# Must be set as "URL TABLE" Alias.
 # Alias URL Table ex.[ https://127.0.0.1:[port]/aliastables/IR_PRI1 ]
 pfupdate=yes
 # ================================================================
@@ -239,8 +240,8 @@ ossectxt=":"
 # Send pfIPrep logs to pfSense System Logs
 plog=no
 # ================================================================
-
-
+ 
+ 
 # ================================================================
 # Hourly Schedule in 24-Hour Clock Format
 # Note: single digits require a space prefix ie: " 1"
@@ -324,9 +325,9 @@ tier10=IR_CC
 # The Script requires the word "match" to be "in" the name.
 matchgroup=IR_Match
 # ================================================================
-
+ 
 # Create Files/Folders as required
-
+ 
 if [ ! -f $masterfile ]; then touch $masterfile; fi
 if [ ! -f $mastercat ]; then touch $mastercat; fi
 if [ ! -f $logfile ]; then touch $logfile; fi
@@ -339,13 +340,13 @@ if [ ! -d $pforigdir ]; then mkdir $pforigdir; fi
 if [ ! -d $pfmatch ]; then mkdir $pfmatch; fi
 if [ ! -d $aliasdir ]; then mkdir $aliasdir; fi
 if [ ! -d $etdir ]; then mkdir $etdir; fi
-
+ 
 # Set bypass=yes on First Run
 if [ ! -d $workdir ]; then
         mkdir $workdir
         bypass=yes
 fi
-
+ 
 # ================================================================
 #
 #                  Block Lists are entered here
@@ -376,7 +377,7 @@ fi
 # dup=      < Duplicate Removal process comparing all
 #             other lists previously downloaded >
 #             ( yes or no )
-
+ 
 # atype=    < Address Type to Utilize >
 #            'faf'           - utilizes Fetch web address and filename
 #            'fa'            - utilized Fetch web address only
@@ -416,19 +417,19 @@ fi
 # [ bypass=yes ], delete the [ ccbinary.lock ] file.
 # Help URL [ http://dev.maxmind.com/faq/what-are-the-eu-europe-and-ap-asia-pacific-entries/ ]
 # Help URL [ http://dev.maxmind.com/geoip/legacy/codes/iso3166/ ]
-
+ 
 header=CountryBinary
 addr=http://geolite.maxmind.com/download/geoip/database/GeoLiteCountry/
 infile=GeoIP.dat.gz
-
+ 
 countrybinary
 # ================================================================
 # ================================================================
-
+ 
 # MaxMind GeoIP COUNTRY CODE Blocklist      (** FIRST STEP **)
 # Set Schedule to "once per day". Any changes made to the Whitelist
 # Country Code file will be incorporated at that time.
-
+ 
 # - To remove, enter  [  countrycode "remove"  ]
 #
 # Before using -
@@ -440,7 +441,7 @@ countrybinary
 # When Adding/Removing Country Blocking the [  ./pfiprep killdb  ]
 # Function should be performed
 # ================================================================
-
+ 
 # Maxmind GeoIP Country Code - Blocklist Download
 #
 # This will only download on the first Tuesday of Each Month
@@ -448,20 +449,20 @@ countrybinary
 # When the CSV Database is downloaded it will create a [ cccsv.lock ] file
 # in the $userfolder path to avoid downloading multiple times. If you
 # want to bypass, delete the [ cccsv.lock ] file.
-
+ 
 header=CountryBlock
 group=tier10
 addr=https://geolite.maxmind.com/download/geoip/database/
 infile=GeoIPCountryCSV.zip
-
+ 
 #countrycode
 # ================================================================
-
+ 
 # This list is not required for pfSense as its downloaded
 # automatically (Check Advanced Settings)
 # FYI - The Following are included in the Bogons
 # "192.168.0.0/16|172.16.0.0/12|10.0.0.0/8"
-
+ 
 # Do not use with pfSense
 #collect "$sch24" "Cymru_Bogons|tier10|http://www.team-cymru.org/Services/Bogons/|fullbogons-ipv4.txt|process|yes|yes|faf"
 #
@@ -475,14 +476,15 @@ infile=GeoIPCountryCSV.zip
 #(To Keep Database Consistencies, add "remove" at the end of a line to Remove a previously downloaded list)
 #   Add a "#" infront of not previously downloaded List, "# collect" to skip a particular Blocklist.
 # =======================================================================================================
-
-collect "$sch1" "ET_IPrep|tier1|https://rules.emergingthreatspro.com/$etprocode/reputation/|iprepdata.txt.gz|processet|yes|yes|faf"
+ 
+# INFO - To use this list you must have a Subscription 
+#collect "$sch1" "ET_IPrep|tier1|https://rules.emergingthreatspro.com/$etprocode/reputation/|iprepdata.txt.gz|processet|yes|yes|faf"
 collect "$sch4" "ET_Comp|tier1|https://rules.emergingthreats.net/blockrules/|compromised-ips.txt|process|yes|yes|faf"
 collect "$sch4" "ET_Block|tier1|https://rules.emergingthreats.net/fwrules/|emerging-Block-IPs.txt|process|yes|yes|faf"
 collect "$sch4" "Spamhaus_drop|tier1|http://www.spamhaus.org/drop/|drop.txt|process|yes|yes|faf"
 collect "$sch4" "Spamhaus_edrop|tier1|http://www.spamhaus.org/drop/|edrop.txt|process|yes|yes|faf"
 # INFO - To use this list you must register with Spamhaus (Spamteq) URL https://www.spamhaustech.com/security/ip-reputation/
-collect "$sch4" "Spamhaus_CC|tier1|na.dr.spamhaus.net::security/|botnetcc|process|yes|yes|rsync"
+#collect "$sch4" "Spamhaus_CC|tier1|na.dr.spamhaus.net::security/|botnetcc|process|yes|yes|rsync"
 collect "$sch4" "CIArmy|tier1|http://cinsscore.com/list/|ci-badguys.txt|process|yes|yes|faf"
 collect "$sch4" "AbuseZeus|tier1|https://zeustracker.abuse.ch/blocklist.php?download=ipblocklis|abusezeusip.txt|process|yes|yes|fa"
 collect "$sch4" "AbuseSpyeye|tier1|https://spyeyetracker.abuse.ch/blocklist.php?download=ipblocklist|abusespyeyeip.txt|process|yes|yes|fa"
@@ -491,13 +493,13 @@ collect "$sch4" "dShield_Top|tier1|https://feeds.dshield.org/|top10-2.txt|proces
 collect "$sch4" "dShield_Block|tier1|https://feeds.dshield.org/|block.txt|processblock|yes|yes|faf"
 collect "$sch4" "SnortBL|tier1|https://labs.snort.org/feeds/|ip-filter.blf|process|yes|yes|faf"
 collect "$sch4" "ISC_top10|tier1|https://isc.sans.edu/reports.html|ISC_top10.txt|process|yes|yes|fa"
-
+ 
 # INFO - Collect IPs from pfSense Snort/Suricata Rulesets. Uncomment (#) the correct line from below.
 #collect "$sch4" "Snort64|tier1|/usr/pbi/snort-amd64/etc/snort/rules/|snort64|process|yes|yes|processlocal"
 #collect "$sch4" "Snort32|tier1|/usr/pbi/snort-i386/etc/snort/rules/|snort32|process|yes|yes|processlocal"
 #collect "$sch4" "Suri64|tier1|/usr/pbi/suricata-amd64/etc/suricata/rules|suricata64|process|yes|yes|processlocal"
 #collect "$sch4" "Suri32|tier1|/usr/pbi/suricata-i386/etc/suricata/rules|suricata32|process|yes|yes|processlocal"
-
+ 
 collect "$sch1" "ALIENVAULT|tier2|https://reputation.alienvault.com/|reputation.snort|process|yes|yes|faf"
 collect "$sch4" "Atlas_Attacks|tier2|https://atlas.arbor.net/summary/|attacks.csv|process|yes|yes|faf"
 collect "$sch4" "Atlas_Botnets|tier2|https://atlas.arbor.net/summary/|botnets.csv|process|yes|yes|faf"
@@ -508,12 +510,12 @@ collect "$sch4" "Atlas_SSH|tier2|https://atlas-public.ec2.arbor.net/public/|ssh_
 collect "$sch4" "SRI_Attackers|tier2|http://www.cyber-ta.org/releases/malware/SOURCES/|Attacker.Cumulative.Summary|process|yes|yes|faf"
 collect "$sch4" "SRI_CC|tier2|http://www.cyber-ta.org/releases/malware/SOURCES/|CandC.Cumulative.Summary|process|yes|yes|faf"
 collect "$sch4" "HoneyPot|tier2|https://www.projecthoneypot.org/list_of_ips.php?t=d&rss=1|honeypot.txt|process|yes|yes|fa"
-
+ 
 collect "$sch4" "MDL|tier4|http://www.malwaredomainlist.com/hostslist/|ip.txt|process|yes|yes|faf"
 collect "$sch4" "NOThink_BL|tier4|http://www.nothink.org/blacklist/|blacklist_malware_http.txt|process|yes|yes|faf"
 collect "$sch4" "NOThink_SSH|tier4|http://www.nothink.org/blacklist/|blacklist_ssh_week.txt|process|yes|yes|faf"
 collect "$sch4" "NOThink_Malware|tier4|http://www.nothink.org/blacklist/|blacklist_malware_dns.txt|process|yes|yes|faf"
-collect "$sch4" "DangerRulez|tier4|http://danger.rulez.sk/projects/bruteforceblocker/|blist.php|process|yes|yes|faf"
+collect "$sch4" "DangerRulez|tier4|https://danger.rulez.sk/projects/bruteforceblocker/|blist.php|process|yes|yes|faf"
 collect "$sch4" "Shunlist|tier4|https://www.autoshun.org/files/|shunlist.csv|process|yes|yes|faf"
 collect "$sch4" "Infiltrated|tier4|http://www.infiltrated.net/|blacklisted|process|yes|yes|faf"
 collect "$sch4" "DRG_SSH|tier4|https://www.dragonresearchgroup.org/insight/|sshpwauth.txt|process|yes|yes|faf"
@@ -524,50 +526,55 @@ collect "$sch4" "Feodo_Bad|tier4|https://feodotracker.abuse.ch/blocklist/?downlo
 collect "$sch4" "WatchGuard|tier4|http://www.reputationauthority.org/|toptens.php|process|yes|yes|fa"
 collect "$sch4" "VMX|tier4|https://vmx.yourcmc.ru/|BAD_HOSTS.IP4|process|yes|yes|faf"
 collect "$sch4" "Geopsy|tier4|http://www.geopsy.org/|blacklist.html|process|yes|yes|faf"
+# INFO - This Blocklist will produce some False Positives (Use a "SAFE ALias" Rule above the Block Rules to whitelist safe IPs)
 collect "$sch4" "MTA|tier4|http://malware-traffic-analysis.net/|index.html|processrecursive|yes|yes|faf"
 collect "$sch4" "Maxmind_Proxy|tier4|https://www.maxmind.com/en/anonymous_proxies|maxmindproxy.txt|process|yes|yes|fa"
 collect "$sch4" "BotScout|tier4|http://www.botscout.com/last_caught_cache.htm|BotScout.txt|process|yes|yes|fa"
 collect "$sch4" "HackedReport|tier4|http://www.hackedreport.com/DownloadAll.aspx|HackedReport.txt|process|yes|yes|fa"
 collect "$sch4" "Juniper_Spam|tier4|https://www.juniper.net/security/auto/spam/|Juniper_Spam.txt|process|yes|yes|fa"
 collect "$sch4" "Greensnow|tier4|http://blocklist.greensnow.co/|greensnow.txt|process|yes|yes|faf"
-collect "$sch4" "malwared|tier4|http://malwared.ru/db/|fulllist.php|process|yes|yes|faf"
+collect "$sch4" "malwared|tier4|https://malwared.ru/db/|fulllist.php|process|yes|yes|faf"
 collect "$sch4" "Cybercrime|tier4|http://cybercrime-tracker.net/|all.php|process|yes|yes|faf"
-
+# INFO - Blocklist.de is set to "all.txt" Refer to URL - http://www.blocklist.de/en/export.html
+collect "$sch4" "BLOCKLIST_DE|tier4|https://lists.blocklist.de/lists/|all.txt|process|yes|yes|faf"
+ 
 collect "$sch8" "MalwareGroup|tier5|http://www.malwaregroup.com/ipaddresses/|malicious|process|yes|yes|faf"
 collect "$sch8" "OpenBL|tier5|http://www.us.openbl.org/lists/|base_30days.txt|process|yes|yes|faf"
 collect "$sch8" "malc0de|tier5|https://malc0de.com/bl/|IP_Blacklist.txt|process|yes|yes|faf"
-
+ 
 # INFO - BadIPs reference a Scoring System (0-5) ( 0 - Full List, 1-2 - Agressive, 3-4 - Conservative, 5 - Ultra Conservative )
 # INFO - Edit the Score in the collect line below following "/any/"
 # INFO - Categories can be changed from "any" to one of these (http://www.badips.com/get/categories)
 collect "$sch4" "BadIPs|tier6|http://www.badips.com/get/list/any/2|badip|process|yes|yes|fa"
-
+ 
 # INFO - This is based on the Spamhaus Drop list.
 collect "$sch4" "IBlock_BT_Hijack|tier7|http://list.iblocklist.com/?list=usrcshglbiilevmyfhse&fileformat=p2p&archiveformat=gz|iblockhiip.txt|processib|yes|yes|fa"
 collect "$sch4" "IBlock_BT_FS|tier7|http://list.iblocklist.com/?list=ficutxiwawokxlcyoeye&fileformat=p2p&archiveformat=gz|iblockfspamip.txt|processib|yes|yes|fa"
 collect "$sch4" "IBlock_BT_Web|tier7|http://list.iblocklist.com/?list=ghlzqtqxnzctvvajwwag&fileformat=p2p&archiveformat=gz|iblockweip.txt|processib|yes|yes|fa"
 collect "$sch4" "IBlock_BT_Spy|tier7|http://list.iblocklist.com/?list=llvtlsjyoyiczbkjsxpf&fileformat=p2p&archiveformat=gz|iblockspyip.txt|processib|yes|yes|fa"
 collect "$sch4" "IBlock_Badpeer|tier7|http://list.iblocklist.com/?list=cwworuawihqvocglcoss&fileformat=p2p&archiveformat=gz|iblockbpip.txt|processib|yes|yes|fa"
-
+ 
+# INFO - IBlock Subscription Feeds (Replace the XXX with Username and PIN)
+#collect "$sch4" "IBlock_Prime|tier7|http://list.iblocklist.com/?list=tkyphgqwfqmawathcozn&fileformat=p2p&archiveformat=gz&username=XXXX&pin=XXXX|iblockprime.txt|processib|yes|yes|fa"
+ 
 # ================================================================
 #               TOR EXIT Blocklists
 # ================================================================
-
+ 
 collect "$sch4" "IBlock_Onion|tier8|http://list.iblocklist.com/?list=togdoptykrlolpddwbvz&fileformat=p2p&archiveformat=gz|iblockonion.txt|processib|yes|yes|fa"
 collect "$sch4" "Blut_TOR|tier8|https://torstatus.blutmagie.de/ip_list_exit.php/|Tor_ip_list_EXIT.csv|process|yes|yes|faf"
-
+ 
 # ================================================================
 #               MAILSERVER Blocklists
 # ================================================================
-
+ 
 #collect "$sch4" "VirBL|tier9|https://virbl.bit.nl/download/|virbl.dnsbl.bit.nl.txt|process|yes|yes|faf"
-#collect "$sch1" "BLOCKLIST_DE|tier9|https://lists.blocklist.de/lists/|all.txt|process|yes|yes|faf"
 #collect "$sch8" "SFS|tier9|http://www.stopforumspam.com/downloads/|bannedips.zip|processtar|yes|yes|faf"
 #collect "$sch4" "Improware|tier9|http://antispam.imp.ch/|spamlist|process|yes|yes|faf"
 #collect "$sch4" "ToastedSpam|tier9|http://toastedspam.com/denylist.cgi|toastedspam_deny.txt|process|yes|yes|fa"
 #collect "$sch1" "Spamcop|tier9|http://spamcop.net/w3m?action=map;net=cmaxcnt;mask=65535;sort=spamcnt;format=text|spamcop.txt|process|yes|yes|fa"
 #collect "$sch4" "URIBL|tier9|http://rss.uribl.com/reports/7d/|dns_a.html|process|yes|yes|faf"
-
+ 
 # ================================================================
 closingprocess
 clearvars
