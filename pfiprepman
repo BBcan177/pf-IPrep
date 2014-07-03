@@ -647,7 +647,7 @@ if [ -s "$dupfile" ]; then
         dup=$(cat $dupfile)
         for ip in $dup; do
                 pcount=1; ii=$(echo "^$ip" | sed 's/\./\\\./g')
-                list=$(find $pfdir ! -name "p24*" ! -name "e_t" -type f | xargs grep -al $ii)
+                list=$(find $pfdir ! -name "p24*" ! -name "e_t*" -type f | xargs grep -al $ii)
                 for blfile in $list; do
                         header=$(echo "${blfile##*/}" | cut -d '.' -f1)
                         grep $ii $blfile > $tempfile
