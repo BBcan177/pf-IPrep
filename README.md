@@ -45,3 +45,27 @@ Depending on how aggressive / conservative an admin wants to configure the proce
 Script allows for Country Code Specific Blocklist utilizing the Maxmind GeoIP Database.
 
 Recently added Support for Emerging Threats IQRisk IPRep Lists to the script. 
+
+
+CHANGLOG - 2.3.3
+
+  * Added Support to use the Emerging Threats IQRISK IP Reputation Lists   
+      (Requires Subscription)
+  * Some more of the Lists now support HTTPS downloads, and the collect lines
+      have been updated.
+  * Added a [ ./pfiprep killdb dskip  ] function which will reset the database with 
+      the existing Downloaded Files
+  * Moved Blocklist.de Blocklist from the Mail Server Section to the Regular  
+      Section, as this list has more than Mail Server Blocklists. Refer to INFO URL in the 
+      script.
+  * Added a few other Blocklists
+  * Script can now process IBlock Subscription Lists
+  * Script can now process SquidBlock lists that are IP based.
+  * Added "plog=yes" option to Log Errors to the pfSense System Log
+
+I recommend running
+
+[ ./pfiprep killdb   ]   with version changes  or  [  ./pfiprep killdb dskip  ]
+
+
+
