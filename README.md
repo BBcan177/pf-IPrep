@@ -47,7 +47,7 @@ Script allows for Country Code Specific Blocklist utilizing the Maxmind GeoIP Da
 Recently added Support for Emerging Threats IQRisk IPRep Lists to the script. 
 
 
-CHANGLOG - 2.3.3
+CHANGELOG - 2.3.3
 
   * Added Support to use the Emerging Threats IQRISK IP Reputation Lists   
       (Requires Subscription)
@@ -66,6 +66,4 @@ CHANGLOG - 2.3.3
 I recommend running
 
 [ ./pfiprep killdb   ]   with version changes  or  [  ./pfiprep killdb dskip  ]
-
-
 
